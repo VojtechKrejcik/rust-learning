@@ -1,22 +1,21 @@
-
-use std::net::TcpStream;
-use std::io::Write;
-use std::io::{stdin, ErrorKind, Read};
-use std::env;
-use serde::{Serialize, Deserialize};
-use std::path::Path;
+use serde::{Deserialize, Serialize};
 use serde_cbor;
+use std::env;
 use std::fs::File;
+use std::io::Write;
+use std::io::{stdin, Read};
+use std::net::TcpStream;
+use std::path::Path;
 
 #[derive(Serialize, Deserialize, Debug)]
 enum MessageType {
     Text(String),
     Image(Vec<u8>),
-    File(String, Vec<u8>)
+    File(String, Vec<u8>),
 }
 
 fn serialize_message(message: &MessageType) -> Vec<u8> {
-   return serde_cbor::to_vec(&message).unwrap();
+    return serde_cbor::to_vec(&message).unwrap();
 }
 
 fn send_message(address: &str, message: &MessageType) {
@@ -31,8 +30,8 @@ fn send_message(address: &str, message: &MessageType) {
     stream.write_all(&serialized).unwrap();
 }
 
-fn file_to_bytes(path:&Path) -> std::io::Result<Vec<u8>> {
-    let  mut file = File::open(path)?;
+fn file_to_bytes(path: &Path) -> std::io::Result<Vec<u8>> {
+    let mut file = File::open(path)?;
     let mut file_data: Vec<u8> = Vec::new();
     file.read_to_end(&mut file_data)?;
     Ok(file_data)
@@ -40,26 +39,26 @@ fn file_to_bytes(path:&Path) -> std::io::Result<Vec<u8>> {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
-    let address:String=  if args.len() == 1 {
+    let address: String = if args.len() == 1 {
         String::from("localhost:1111")
-    }else if args.len() == 3{
+    } else if args.len() == 3 {
         format!("{}:{}", args[1], args[2])
-    }else{
+    } else {
         String::from("")
     };
     loop {
         let mut input = String::new();
-        stdin().read_line(&mut input)?; 
-        
+        stdin().read_line(&mut input)?;
+
         let args: Vec<&str> = input.split_whitespace().collect();
-        
-        
+
         match args[0] {
             ".file" => {
                 let path = Path::new(args[1]);
+                let filename = args[1].split("/").last().unwrap();
                 match file_to_bytes(&path) {
                     Ok(file_data) => {
-                        let msg = MessageType::File(String::from(args[1]), file_data);
+                        let msg = MessageType::File(String::from(filename), file_data);
                         send_message(&address, &msg);
                     }
                     Err(e) => {
@@ -67,11 +66,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         continue;
                     }
                 }
-
             }
-            ".image" => send_message(&address, &MessageType::Image(input.as_bytes().to_vec())),
-            ".quit" => break(Ok(())),
-            _ => send_message(&address, &MessageType::Text(String::from(input)))
+            ".image" => {
+                let path = Path::new(args[1]);
+                match file_to_bytes(&path) {
+                    Ok(file_data) => {
+                        let msg = MessageType::Image(file_data);
+                        send_message(&address, &msg);
+                    }
+                    Err(e) => {
+                        println!("Error reading file: {}", e);
+                        continue;
+                    }
+                }
+            }
+            ".quit" => break (Ok(())),
+            _ => send_message(&address, &MessageType::Text(String::from(input))),
         }
     }
 }
